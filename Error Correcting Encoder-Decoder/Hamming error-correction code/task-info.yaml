@@ -1,0 +1,619 @@
+type: edu
+custom_name: stage5
+files:
+- name: test/CorrecterTest.java
+  visible: false
+  text: |+
+    import correcter.Main;
+
+    import org.hyperskill.hstest.testcase.CheckResult;
+    import org.hyperskill.hstest.stage.StageTest;
+    import org.hyperskill.hstest.testcase.TestCase;
+
+    import java.io.File;
+    import java.io.FileInputStream;
+    import java.io.FileNotFoundException;
+    import java.io.IOException;
+    import java.util.ArrayList;
+    import java.util.List;
+
+    class TestClue {
+        String input;
+        String fileContent;
+
+        TestClue(String input, String fileContent) {
+            this.input = input;
+            this.fileContent = fileContent;
+        }
+    }
+
+    public class CorrecterTest extends StageTest<TestClue> {
+
+        private static File received = null;
+        private static File encoded = null;
+        private static File decoded = null;
+
+        public CorrecterTest() throws Exception {
+            super(Main.class);
+        }
+
+        @Override
+        public List<TestCase<TestClue>> generate() {
+            TestClue[] testClues = new TestClue[]{
+                new TestClue("encode", "Eat more of these french buns!"),
+                new TestClue("send",   "Eat more of these french buns!"),
+                new TestClue("decode", "Eat more of these french buns!"),
+
+                new TestClue("encode", "$ome rand0m messAge"),
+                new TestClue("send",   "$ome rand0m messAge"),
+                new TestClue("decode", "$ome rand0m messAge"),
+
+                new TestClue("encode", "better call Saul 555-00-73!"),
+                new TestClue("send",   "better call Saul 555-00-73!"),
+                new TestClue("decode", "better call Saul 555-00-73!"),
+
+                new TestClue("encode", "5548172 6548 225147 23656595 5155"),
+                new TestClue("send",   "5548172 6548 225147 23656595 5155"),
+                new TestClue("decode", "5548172 6548 225147 23656595 5155"),
+            };
+
+            List<TestCase<TestClue>> result = new ArrayList<>();
+
+            for (int i = 0; i < testClues.length; i++) {
+                result.add(new TestCase<TestClue>()
+                    .setAttach(testClues[i])
+                    .setInput(testClues[i].input)
+                    .addFile("send.txt", testClues[i].fileContent));
+            }
+
+            return result;
+        }
+
+        @Override
+        public CheckResult check(String reply, TestClue clue) {
+            String path = System.getProperty("user.dir");
+
+            received = null;
+            encoded = null;
+            decoded = null;
+
+            searchReceived(path, "received.txt");
+            searchEncoded(path, "encoded.txt");
+            searchDecoded(path, "decoded.txt");
+
+            String correctFileBinary = toBinary(clue.fileContent.getBytes());
+            String correctFileEncoded = encodeFile(correctFileBinary);
+
+            String action = clue.input;
+
+            if (action.equals("encode")) {
+
+                if (encoded == null) {
+                    return new CheckResult(false,
+                        "Can't find encoded.txt file. " +
+                            "Make sure your program writes it down or " +
+                            "make sure the name of file is correct.");
+                }
+
+                byte[] encodedContent;
+                FileInputStream encodedStream;
+
+                try {
+                    encodedStream = new FileInputStream(encoded);
+                } catch (FileNotFoundException e) {
+                    return new CheckResult(false,
+                        "Can't find received.txt file. " +
+                            "Make sure your program writes it down or " +
+                            "make sure the name of file is correct.");
+                }
+
+                try {
+                    encodedContent = encodedStream.readAllBytes();
+                } catch (IOException e) {
+                    e.printStackTrace();
+                    throw new RuntimeException("Can't read the file");
+                }
+
+                String encodedBinary = toBinary(encodedContent);
+
+                return new CheckResult(encodedBinary.equals(correctFileEncoded));
+            }
+
+            if (action.equals("send")) {
+
+                if (received == null) {
+                    return new CheckResult(false,
+                        "Can't find received.txt file. " +
+                            "Make sure your program writes it " +
+                            "down or make sure the name of file is correct.");
+                }
+
+                byte[] receivedContent;
+
+                FileInputStream receivedStream;
+
+                try {
+                    receivedStream = new FileInputStream(received);
+                } catch (FileNotFoundException e) {
+                    return new CheckResult(false,
+                        "Can't find received.txt file. " +
+                            "Make sure your program writes it down or " +
+                            "make sure the name of file is correct.");
+                }
+
+                try {
+                    receivedContent = receivedStream.readAllBytes();
+                } catch (IOException e) {
+                    e.printStackTrace();
+                    throw new RuntimeException("Can't read the file");
+                }
+
+                String receivedBinary = toBinary(receivedContent);
+
+
+                return checkDifference(receivedBinary, correctFileEncoded);
+            }
+
+
+
+            if (action.equals("decode")) {
+
+                if (decoded == null) {
+                    return new CheckResult(false,
+                        "Can't find decoded.txt file. " +
+                            "Make sure your program writes it down or " +
+                            "make sure the name of file is correct.");
+                }
+
+                byte[] decodedContent;
+
+
+                FileInputStream decodedStream;
+
+                try {
+                    decodedStream = new FileInputStream(decoded);
+                } catch (FileNotFoundException e) {
+                    return new CheckResult(false,
+                        "Can't find received.txt file. " +
+                            "Make sure your program writes it down or " +
+                            "make sure the name of file is correct.");
+                }
+
+                try {
+                    decodedContent = decodedStream.readAllBytes();
+                } catch (IOException e) {
+                    e.printStackTrace();
+                    throw new RuntimeException("Can't read the file");
+                }
+
+                String decodedBinary = toBinary(decodedContent);
+
+                if (!decodedBinary.equals(correctFileBinary)) {
+                    return new CheckResult(false, "The decoded text must match initial text!");
+                }
+
+                return CheckResult.correct();
+            }
+
+            throw new RuntimeException("Can't check the program");
+        }
+
+        private static String toBinary(byte[] bytes) {
+            StringBuilder sb = new StringBuilder(bytes.length * Byte.SIZE);
+            for (int i = 0; i < Byte.SIZE * bytes.length; i++) {
+                sb.append((bytes[i / Byte.SIZE] << i % Byte.SIZE & 0x80) == 0 ? '0' : '1');
+            }
+            return sb.toString();
+        }
+
+        private static byte[] fromBinary(String s) {
+            int sLen = s.length();
+            byte[] toReturn = new byte[(sLen + Byte.SIZE - 1) / Byte.SIZE];
+            char c;
+            for (int i = 0; i < sLen; i++)
+                if ((c = s.charAt(i)) == '1')
+                    toReturn[i / Byte.SIZE] = (byte) (toReturn[i / Byte.SIZE] | (0x80 >>> (i % Byte.SIZE)));
+                else if (c != '0')
+                    throw new IllegalArgumentException();
+            return toReturn;
+        }
+
+        private static void searchReceived(String dirName, String fileName) {
+            File dir = new File(dirName);
+            File[] list = dir.listFiles();
+
+            if (list != null) {
+                for (File f : list) {
+                    if (f.isDirectory()) {
+                        searchReceived(f.getAbsolutePath(), fileName);
+                    } else if (f.getAbsolutePath().contains(fileName)) {
+                        received = f;
+                    }
+                }
+            }
+        }
+
+        private static void searchEncoded(String dirName, String fileName) {
+            File dir = new File(dirName);
+            File[] list = dir.listFiles();
+
+            if (list != null) {
+                for (File f : list) {
+                    if (f.isDirectory()) {
+                        searchEncoded(f.getAbsolutePath(), fileName);
+                    } else if (f.getAbsolutePath().contains(fileName)) {
+                        encoded = f;
+                    }
+                }
+            }
+        }
+
+        private static void searchDecoded(String dirName, String fileName) {
+            File dir = new File(dirName);
+            File[] list = dir.listFiles();
+
+            if (list != null) {
+                for (File f : list) {
+                    if (f.isDirectory()) {
+                        searchDecoded(f.getAbsolutePath(), fileName);
+                    } else if (f.getAbsolutePath().contains(fileName)) {
+                        decoded = f;
+                    }
+                }
+            }
+        }
+
+        private String encodeFile(String binaryString) {
+
+            String encoded = "";
+
+            for (int i = 0; i < binaryString.length(); i += 4) {
+
+                if (i + 4 > binaryString.length()) {
+                    throw new RuntimeException("Can't decode binary data");
+                }
+
+                int startSubIndex = i;
+                int stopSubIndex = i + 4;
+
+                String currSub = binaryString.substring(startSubIndex, stopSubIndex);
+
+                String encodedPart;
+
+                int parityBit1 = 0;
+                int parityBit2 = 0;
+                int parityBit4 = 0;
+
+                if (currSub.charAt(0) == '1') {
+                    parityBit1++;
+                    parityBit2++;
+                }
+
+                if (currSub.charAt(1) == '1') {
+                    parityBit1++;
+                    parityBit4++;
+                }
+
+                if (currSub.charAt(2) == '1') {
+                    parityBit2++;
+                    parityBit4++;
+                }
+
+                if (currSub.charAt(3) == '1') {
+                    parityBit1++;
+                    parityBit2++;
+                    parityBit4++;
+                }
+
+                encodedPart =
+                    (parityBit1 % 2 == 1? "1": "0") +
+                    (parityBit2 % 2 == 1? "1": "0") +
+                    currSub.charAt(0) +
+                    (parityBit4 % 2 == 1? "1": "0") +
+                    currSub.charAt(1) +
+                    currSub.charAt(2) +
+                    currSub.charAt(3) +
+                    "0";
+
+                encoded += encodedPart;
+            }
+
+            return encoded;
+        }
+
+        private CheckResult checkDifference(String output, String correct) {
+            if (output.isEmpty() && correct.isEmpty()) return CheckResult.correct();
+
+            if (output.length() != correct.length()) {
+                return new CheckResult(false,
+                    "The program was expected to output " +
+                        correct.length() / 8 +
+                        " bytes, but output " +
+                        output.length() / 8);
+            }
+
+            for (int i = 0; i < output.length(); i += 8) {
+                String currOutputByte = output.substring(i, i+8);
+                String currCorrectByte = correct.substring(i, i+8);
+
+                int difference = 0;
+                for (int j = 0; j < currCorrectByte.length(); j++) {
+                    char currOutputBit = currOutputByte.charAt(j);
+                    char currCorrectBit = currCorrectByte.charAt(j);
+
+                    if (currCorrectBit != currOutputBit) {
+                        difference++;
+                    }
+                }
+
+                if (difference == 0) {
+                    return new CheckResult(false,
+                        "One of bytes from the input stayed the same but should be changed");
+                }
+
+                if (difference != 1) {
+                    return new CheckResult(false,
+                        "One of bytes from the input was changes in more than one bit");
+                }
+            }
+
+            return CheckResult.correct();
+        }
+    }
+
+  learner_created: false
+- name: decoded.txt
+  visible: true
+  text: 5548172 6548 225147 23656595 5155
+  learner_created: true
+- name: encoded.txt
+  visible: true
+  text: "\x0f�3<3���\x0f�\0<\0���\x0f��3\0\0��\x0f�3<3\0�\0\x0f\0\0<\x0f\0�3\x0f�\
+    3<\0���\x0f��3\0\0�3\x0f��<<\0��\x0f��<3��\x0f\x0f�33\0\0��\x0f�3<3���"
+  learner_created: true
+- name: src/correcter/Main.java
+  visible: true
+  text: |-
+    package correcter;
+
+    import java.util.Random;
+    import java.util.Scanner;
+    import java.io.*;
+
+    public class Main {
+        public static void main(String[] args) {
+            File FileOriginal = new File("send.txt");
+            File FileReceived = new File("received.txt");
+            File FileEncoded = new File("encoded.txt");
+            File FileDecoded = new File("decoded.txt");
+            byte[] byteArray;
+            StringBuilder encodedText = new StringBuilder();
+            StringBuilder parityText = new StringBuilder();
+            StringBuilder corruptedText = new StringBuilder();
+            StringBuilder decodedText = new StringBuilder();
+
+            System.out.print("Write a mode: ");
+            switch (new Scanner(System.in).nextLine()) {
+                case "encode":
+                    try (FileInputStream inputStream = new FileInputStream(FileOriginal)) {
+                        byteArray = inputStream.readAllBytes();
+                        encodedText = encodeBinaryText(byteArray);
+                        parityText = updateBinaryStringWithParityBits(encodedText);
+                        saveStringBuilderToFile(parityText, FileEncoded);
+                    } catch (IOException e) {
+                        System.out.println("Wrong input file.");
+                    }
+                    break;
+                case "send":
+                    try (FileInputStream inputStream = new FileInputStream(FileEncoded)) {
+                        byteArray = inputStream.readAllBytes();
+                        parityText = convertToBinaryText(byteArray);
+                        corruptedText = simulateBinaryCorruptionTransmission(parityText);
+                        saveStringBuilderToFile(corruptedText, FileReceived);
+                    } catch (IOException e) {
+                        System.out.println("Wrong Encoded text file.");
+                    }
+                    break;
+                case "decode":
+                    try (FileInputStream inputStream = new FileInputStream(FileReceived)) {
+                        byteArray = inputStream.readAllBytes();
+                        corruptedText = convertToBinaryText(byteArray);
+                        decodedText = decodeBinaryCorruptedText(corruptedText);
+                        saveStringBuilderToFile(decodedText, FileDecoded);
+                    } catch (IOException e) {
+                        System.out.println("Wrong Received text file.");
+                    }
+                    break;
+                default:
+                    System.out.println("Wrong command");
+                    break;
+            }
+        }
+
+        public static StringBuilder convertToBinaryText(byte[] byteArray) {
+            StringBuilder stringBinaryOriginal = new StringBuilder();
+            for (byte currentByte : byteArray) {
+                stringBinaryOriginal.append(String.format("%8s", Integer.toBinaryString(currentByte & 0xFF)).replace(' ', '0')).append(" ");
+            }
+            return stringBinaryOriginal;
+        }
+
+        public static StringBuilder encodeBinaryText(byte[] byteArray) {
+            StringBuilder stringBinaryEncoded = new StringBuilder();
+            int cnt = 0;
+            for (byte currentByte : byteArray) {
+                StringBuilder stringBinaryOriginal = new StringBuilder(String.format("%8s", Integer.toBinaryString(currentByte & 0xFF)).replace(' ', '0'));
+                for (int i = 0; i < stringBinaryOriginal.length(); i++) {
+                    if (cnt >= 6) {
+                        cnt = 0;
+                        stringBinaryEncoded.append(".. ");
+                    }
+                    stringBinaryEncoded.append(stringBinaryOriginal.charAt(i)).append(stringBinaryOriginal.charAt(i));
+                    cnt += 2;
+                }
+            }
+
+            int countOfAdditionalDots = 8 - stringBinaryEncoded.length() % 9;
+
+            stringBinaryEncoded.append(".".repeat(countOfAdditionalDots));
+
+            return stringBinaryEncoded;
+        }
+
+        public static StringBuilder updateBinaryStringWithParityBits(StringBuilder stringBuilder) {
+            StringBuilder stringBinaryEncodedWithParity = new StringBuilder(stringBuilder);
+            int numberOfBytesInString = (stringBuilder.length() + 1) / 9;
+            int i = 0;
+
+            //fill the last byte with unused '0' bits.
+            if (numberOfBytesInString > 8) {
+                if (stringBinaryEncodedWithParity.charAt(stringBuilder.length() - 6) == '.') {
+                    stringBinaryEncodedWithParity.replace( stringBuilder.length() - 6, stringBuilder.length() - 2, "0000");
+                }
+                if (stringBinaryEncodedWithParity.charAt(stringBuilder.length() - 4) == '.') {
+                    stringBinaryEncodedWithParity.replace(stringBuilder.length() - 4, stringBuilder.length() - 2, "00");
+                }
+            }
+
+            for (int j = 0; j < numberOfBytesInString; j++) {
+                int parity = Integer.parseInt(stringBinaryEncodedWithParity.substring(i, i + 1)) ^
+                             Integer.parseInt(stringBinaryEncodedWithParity.substring(i + 2, i + 3)) ^
+                             Integer.parseInt(stringBinaryEncodedWithParity.substring(i + 4, i + 5));
+
+                stringBinaryEncodedWithParity.replace(i + 6, i + 7, Integer.toString(parity));
+                stringBinaryEncodedWithParity.replace(i + 7, i + 8, Integer.toString(parity));
+                i += 9;
+            }
+            return stringBinaryEncodedWithParity;
+        }
+
+        public static StringBuilder simulateBinaryCorruptionTransmission(StringBuilder stringBuilder) {
+            Random random = new Random();
+            StringBuilder corruptedString = new StringBuilder();
+
+            for (String byteString : stringBuilder.toString().split(" ")) {
+                StringBuilder byteStringBuilder = new StringBuilder(byteString);
+                int index = random.nextInt(8);
+                if (byteStringBuilder.charAt(index) == '0') {
+                    byteStringBuilder.replace(index, index + 1, "1");
+                } else {
+                    byteStringBuilder.replace(index, index + 1, "0");
+                }
+                corruptedString.append(byteStringBuilder).append(" ");
+            }
+            corruptedString.deleteCharAt(corruptedString.length() - 1);
+
+            return corruptedString;
+        }
+
+        public static StringBuilder decodeBinaryCorruptedText(StringBuilder stringBuilder) {
+            StringBuilder fixedString = new StringBuilder();
+            StringBuilder decodedString = new StringBuilder();
+
+            for (String byteString : stringBuilder.toString().split(" ")) {
+                StringBuilder byteStringBuilder = new StringBuilder(byteString);
+
+                if (byteStringBuilder.charAt(0) != byteStringBuilder.charAt(1)) {
+                    if (byteStringBuilder.charAt(7) == '0') {
+                        if (Integer.parseInt(byteStringBuilder.toString().substring(2, 3)) + Integer.parseInt(byteStringBuilder.toString().substring(4, 5)) == 0) {
+                            byteStringBuilder.replace(0, 2, "00");
+                        } else if (Integer.parseInt(byteStringBuilder.toString().substring(2, 3)) + Integer.parseInt(byteStringBuilder.toString().substring(4, 5)) == 2) {
+                            byteStringBuilder.replace(0, 2, "00");
+                        } else {
+                            byteStringBuilder.replace(0, 2, "11");
+                        }
+                    } else {
+                        if (Integer.parseInt(byteStringBuilder.toString().substring(2, 3)) + Integer.parseInt(byteStringBuilder.toString().substring(4, 5)) == 1) {
+                            byteStringBuilder.replace(0, 2, "00");
+                        } else {
+                            byteStringBuilder.replace(0, 2, "11");
+                        }
+                    }
+                } else if (byteStringBuilder.charAt(2) != byteStringBuilder.charAt(3)) {
+                    if (byteStringBuilder.charAt(7) == '0') {
+                        if (Integer.parseInt(byteStringBuilder.toString().substring(0, 1)) + Integer.parseInt(byteStringBuilder.toString().substring(4, 5)) == 0) {
+                            byteStringBuilder.replace(2, 4, "00");
+                        } else if (Integer.parseInt(byteStringBuilder.toString().substring(0, 1)) + Integer.parseInt(byteStringBuilder.toString().substring(4, 5)) == 2) {
+                            byteStringBuilder.replace(2, 4, "00");
+                        } else {
+                            byteStringBuilder.replace(2, 4, "11");
+                        }
+                    } else {
+                        if (Integer.parseInt(byteStringBuilder.toString().substring(0, 1)) + Integer.parseInt(byteStringBuilder.toString().substring(4, 5)) == 1) {
+                            byteStringBuilder.replace(2, 4, "00");
+                        } else {
+                            byteStringBuilder.replace(2, 4, "11");
+                        }
+                    }
+                } else if (byteStringBuilder.charAt(4) != byteStringBuilder.charAt(5)) {
+                    if (byteStringBuilder.charAt(7) == '0') {
+                        if (Integer.parseInt(byteStringBuilder.toString().substring(0, 1)) + Integer.parseInt(byteStringBuilder.toString().substring(2, 3)) == 0) {
+                            byteStringBuilder.replace(4, 6, "00");
+                        } else if (Integer.parseInt(byteStringBuilder.toString().substring(0, 1)) + Integer.parseInt(byteStringBuilder.toString().substring(2, 3)) == 2) {
+                            byteStringBuilder.replace(4, 6, "00");
+                        } else {
+                            byteStringBuilder.replace(4, 6, "11");
+                        }
+                    } else {
+                        if (Integer.parseInt(byteStringBuilder.toString().substring(0, 1)) + Integer.parseInt(byteStringBuilder.toString().substring(2, 3)) == 1) {
+                            byteStringBuilder.replace(4, 6, "00");
+                        } else {
+                            byteStringBuilder.replace(4, 6, "11");
+                        }
+                    }
+                }
+                fixedString.append(byteStringBuilder).append(" ");
+            }
+            fixedString.deleteCharAt(fixedString.length() - 1);
+
+            decodedString = decodeBinaryText(fixedString);
+            return decodedString;
+        }
+
+        public static void saveStringBuilderToFile(StringBuilder stringBuilder, File outputFile) {
+            int numberOfBytesInString = (stringBuilder.length() + 1) / 9;
+            int index = 0;
+
+            try (FileOutputStream outputStream = new FileOutputStream(outputFile)) {
+                for (int i = 0; i < numberOfBytesInString; i++) {
+                    outputStream.write(Integer.parseInt(stringBuilder.toString().substring(index, index + 8), 2));
+                    index += 9;
+                }
+            } catch (IOException e) {
+                System.out.println("Wrong output file.");
+            }
+        }
+
+        public static StringBuilder decodeBinaryText(StringBuilder stringBuilder) {
+            StringBuilder temp = new StringBuilder();
+            StringBuilder temp2 = new StringBuilder();
+            StringBuilder decodedString = new StringBuilder();
+            int numberOfBytesInString = (stringBuilder.length() + 1) / 9;
+            int cnt = 0;
+
+            if (numberOfBytesInString > 0) {
+                for (int i = 0; i < numberOfBytesInString; i++) {
+                    temp.append(stringBuilder.substring(cnt, cnt + 6));
+                    cnt += 9;
+                } // deletes parity bits and spaces
+
+                for (int i = 0; i < temp.length(); i += 2) {
+                    temp2.append(temp.charAt(i));
+                } // takes one unique bit from duplicate pair of bits
+
+                for (int j = 0, index = 0; j < temp2.length() / 8; j++, index += 8) {
+                    decodedString.append(temp2.substring(index, index + 8)).append(" ");
+                } //splits 8-bits groups
+            }
+            return decodedString;
+        }
+    }
+  learner_created: true
+- name: received.txt
+  visible: true
+  text: "\x1f��8s���\x1f� , C��\nӃ2\x04\x02��\v�1�7\b� \v�\x04�O �;\x0e�s=\x01���\
+    O��\x13 ��1\v��|�\x04��O�C,\x13�\x7f\x0eOȳ7@\bЌ\aC78\x13��"
+  learner_created: true
+feedback_link: https://hyperskill.org/projects/58/stages/316/implement
+status: Solved
+record: -1
